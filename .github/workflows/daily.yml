@@ -7,7 +7,7 @@ on:
 
 jobs:
   run-nodeseek-daily:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
@@ -18,15 +18,20 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Setup Chrome
-        uses: browser-actions/setup-chrome@v1
-        with:
-          chrome-version: stable
-
-      - name: Install Xvfb
+      - name: Install Chrome and dependencies
         run: |
+          # 安装依赖
           sudo apt-get update
-          sudo apt-get install -y xvfb
+          sudo apt-get install -y wget gnupg xvfb
+          
+          # 添加 Google Chrome 官方源
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          
+          # 安装稳定版 Chrome
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+          
           echo "Chrome version:"
           google-chrome --version
 
