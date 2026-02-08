@@ -38,11 +38,9 @@ class Config:
         self.tg_bot_token = os.environ.get("TG_BOT_TOKEN")
         self.tg_chat_id = os.environ.get("TG_CHAT_ID")
         
-        # 评论区域配置
-        self.comment_url = os.environ.get(
-            "NS_COMMENT_URL", 
-            "https://www.nodeseek.com/categories/trade"
-        )
+        # 评论区域配置（处理空字符串）
+        comment_url_env = os.environ.get("NS_COMMENT_URL", "") or ""
+        self.comment_url = comment_url_env.strip() if comment_url_env.strip() else "https://www.nodeseek.com/categories/trade"
         
         # 随机延迟配置（分钟）
         delay_min_str = os.environ.get("NS_DELAY_MIN", "") or "0"
@@ -148,61 +146,82 @@ def check_login_status(driver):
 @retry(max_attempts=3, delay=5)
 def click_sign_icon(driver):
     """
-    尝试点击签到图标和试试手气按钮的通用方法
+    尝试点击签到图标并完成签到
+    返回: True 表示签到成功，False 表示失败或已签到
     """
     try:
         print("开始查找签到图标...")
-        # 使用更精确的选择器定位签到图标
-        sign_icon = WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.XPATH, "//span[@title='签到']"))
-        )
-        print("找到签到图标，准备点击...")
         
-        # 确保元素可见
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", sign_icon)
-        time.sleep(1)
+        # 方案 A: 直接跳转到签到页面
+        print("直接访问签到页面...")
+        driver.get("https://www.nodeseek.com/board")
+        time.sleep(3)
         
-        # 打印元素信息
-        print(f"签到图标元素: {sign_icon.get_attribute('outerHTML')}")
-        
-        # 使用 JavaScript 点击避免遮挡问题
-        print("使用 JavaScript 点击签到图标...")
-        driver.execute_script("arguments[0].click();", sign_icon)
-        print("签到图标点击成功")
-        
-        print("等待页面跳转...")
-        time.sleep(5)
-        
-        # 打印当前URL
         print(f"当前页面URL: {driver.current_url}")
         
-        # 点击"试试手气"按钮
+        # 检查是否已签到（页面上显示"今日已签到"）
+        try:
+            already_signed = driver.find_elements(By.XPATH, "//*[contains(text(), '今日已签到')]")
+            if already_signed:
+                print("今日已签到，无需重复操作")
+                return True
+        except:
+            pass
+        
+        # 查找签到按钮
         try:
             click_button = None
             
             if config.ns_random:
-                click_button = WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '试试手气')]"))
-            )
+                print("查找试试手气按钮...")
+                click_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '试试手气')]"))
+                )
             else:
-                click_button = WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '鸡腿 x 5')]"))
-            )
+                print("查找鸡腿 x 5按钮...")
+                click_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '鸡腿 x 5')]"))
+                )
             
-            click_button.click()
-            print("完成试试手气点击")
-        except Exception as lucky_error:
-            print(f"试试手气按钮点击失败或者签到过了: {str(lucky_error)}")
+            # 使用 JavaScript 点击
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", click_button)
+            time.sleep(0.5)
+            driver.execute_script("arguments[0].click();", click_button)
+            print("签到按钮点击成功")
             
-        return True
+            time.sleep(2)
+            
+            # 验证签到是否成功（检查页面是否显示签到成功相关元素）
+            try:
+                # 检查是否出现签到成功的提示或排行榜
+                success_indicators = driver.find_elements(By.XPATH, "//*[contains(text(), '签到排行榜') or contains(text(), '今日已签到')]")
+                if success_indicators:
+                    print("✅ 签到成功")
+                    return True
+            except:
+                pass
+            
+            # 如果按钮点击了但无法确认，也返回 True
+            print("签到按钮已点击")
+            return True
+            
+        except Exception as btn_error:
+            print(f"签到按钮未找到或已签到: {str(btn_error)}")
+            # 检查是否已签到
+            try:
+                already_signed = driver.find_elements(By.XPATH, "//*[contains(text(), '今日已签到')]")
+                if already_signed:
+                    print("今日已签到")
+                    return True
+            except:
+                pass
+            return False
         
     except Exception as e:
         print(f"签到过程中出错:")
         print(f"错误类型: {type(e).__name__}")
         print(f"错误信息: {str(e)}")
         print(f"当前页面URL: {driver.current_url}")
-        print(f"当前页面源码片段: {driver.page_source[:500]}...")
-        print("详细错误信息:")
         traceback.print_exc()
         return False
 
