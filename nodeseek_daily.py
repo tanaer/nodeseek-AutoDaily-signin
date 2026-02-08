@@ -183,24 +183,47 @@ def click_sign_icon(driver):
         driver.get("https://www.nodeseek.com/board")
         time.sleep(3)
         
-        print(f"当前页面URL: {driver.current_url}")
+        current_url = driver.current_url
+        print(f"当前页面URL: {current_url}")
         
+        # 0. 检查 Cloudflare
+        if "Just a moment" in driver.title or "Attention Required" in driver.title:
+            print("❌ 检测到 Cloudflare 拦截")
+            driver.save_screenshot("cf_block_sign.png")
+            send_telegram_photo("cf_block_sign.png", caption="❌ 签到时遭遇 Cloudflare 拦截")
+            return False
+            
+        # 1. 检查是否被重定向回首页（说明Cookie可能失效，或者没有权限访问/board）
+        if "/board" not in current_url and "nodeseek.com" in current_url and len(current_url) < 30:
+            print("⚠️ 似乎跳转回了首页，尝试在首页寻找签到入口...")
+            # 回退到旧逻辑：找首页的签到图标
+            try:
+                sign_icon = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, "//span[@title='签到']"))
+                )
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", sign_icon)
+                time.sleep(0.5)
+                driver.execute_script("arguments[0].click();", sign_icon)
+                print("首页签到图标点击成功")
+                time.sleep(3)
+                # 点击后通常会弹窗或跳转，这里继续往下检查状态
+            except Exception as e:
+                print(f"首页签到图标未找到: {str(e)}")
+        
+        # 2. 尝试定位签到面板（.board-intro）
         try:
             # 等待签到面板加载（黄色背景区域）
-            board_intro = WebDriverWait(driver, 15).until(
+            # 缩短等待时间，因为如果没加载出来，可能是已签到或者样式变了
+            board_intro = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, ".board-intro"))
             )
             print("签到面板加载成功")
             
-            # 策略1：检查是否存在可点击的按钮（签到按钮通常都在这个区域）
+            # 检查是否有按钮
             buttons = board_intro.find_elements(By.TAG_NAME, "button")
-            
             if buttons:
                 print(f"发现 {len(buttons)} 个按钮，尝试点击...")
-                target_button = buttons[0] # 通常第一个就是签到/试试手气
-                
-                # 如果有多个按钮，优先找包含"手气"或"鸡腿"的（防止点到其他无关按钮）
-                # 如果因为乱码无法匹配，就默认点第一个
+                target_button = buttons[0]
                 for btn in buttons:
                     text = btn.text
                     if "手气" in text or "鸡腿" in text:
@@ -210,37 +233,68 @@ def click_sign_icon(driver):
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_button)
                 time.sleep(0.5)
                 driver.execute_script("arguments[0].click();", target_button)
-                print("签到按钮点击成功 (基于按钮存在性判断)")
-                
+                print("签到按钮点击成功")
                 time.sleep(2)
-                
-                # 点击后验证：按钮是否消失或变成了文本
                 return True
-                
             else:
-                # 策略2：如果没有按钮，检查是否存在排行榜或提示文本
-                # 这通常意味着已经签到过了
-                print("未发现签到按钮，检查是否已签到...")
-                rank_list = driver.find_elements(By.CSS_SELECTOR, ".board-rank")
-                if rank_list:
-                    print("发现签到排行榜，判定为今日已签到")
+                print("签到面板无按钮，检查文本状态...")
+                # 检查面板文本
+                intro_text = board_intro.text
+                print(f"面板文本内容: {intro_text}")
+                
+                if "获得" in intro_text or "排名" in intro_text or "已签到" in intro_text:
+                    print("✅ 检测到已签到关键词")
                     return True
+                
+                if "还未签到" in intro_text:
+                    print("❌ 检测到'还未签到'文本，但未找到按钮")
+                    # 尝试再次查找按钮，可能是加载延迟
+                    try:
+                        btns = board_intro.find_elements(By.TAG_NAME, "button")
+                        if btns:
+                            print(f"重试发现 {len(btns)} 个按钮，尝试点击...")
+                            btns[0].click()
+                            return True
+                    except:
+                        pass
                     
-                # 乱码情况下的保底检查：只要能看到 .board-intro 但没按钮，大概率就是已签到
-                print("存在签到面板但无按钮，默认判定为已签到")
-                return True
+                # 移除单纯检查排行榜的逻辑，因为未签到也会显示排行榜
+                # if driver.find_elements(By.CSS_SELECTOR, ".board-rank"):
+                #     print("发现签到排行榜，判定为已签到")
+                #     return True
+                    
+                print("❌ 无法确认签到状态 (面板无按钮且无明确已签到文本)")
+                return False
 
-        except Exception as e:
-            print(f"签到面板定位失败: {str(e)}")
+        except TimeoutException:
+            print("⚠️ 未找到签到面板 (.board-intro)，尝试全局文本搜索...")
+            
+            # 3. 兜底策略：全局搜索文本
+            page_text = driver.find_element(By.TAG_NAME, "body").text
+            if "今日已签到" in page_text or "签到成功" in page_text or "本次获得" in page_text:
+                print("✅ 全局文本检测到 '已签到' 相关字样")
+                return True
+                
+            if "登录" in page_text and "注册" in page_text and "个人中心" not in page_text:
+                print("❌ 检测到页面包含'登录/注册'，可能是Cookie失效")
+                return False
+
+            print("❌ 无法确认签到状态")
             # 截图分析
             screenshot_path = "sign_intro_error.png"
             driver.save_screenshot(screenshot_path)
-            send_telegram_photo(screenshot_path, caption=f"❌ 签到面板定位失败\n错误: {str(e)}")
+            send_telegram_photo(screenshot_path, caption=f"❌ 签到状态未知\nURL: {current_url}")
             return False
             
     except Exception as e:
         print(f"签到过程中出错: {str(e)}")
         traceback.print_exc()
+        # 截图
+        try:
+            driver.save_screenshot("sign_exception.png")
+            send_telegram_photo("sign_exception.png", caption=f"❌ 签到异常: {str(e)}")
+        except:
+            pass
         return False
 
 def setup_driver_and_cookies(cookie_str):
