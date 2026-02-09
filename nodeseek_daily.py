@@ -32,7 +32,7 @@ class Config:
         self.cookies = [c.strip() for c in raw_cookie.split("|") if c.strip()]
         
         # 基础配置
-        self.ns_random = os.environ.get("NS_RANDOM", "false").lower() == "true"
+        self.ns_random = os.environ.get("NS_RANDOM", "true").lower() == "true"
         self.headless = os.environ.get("HEADLESS", "true").lower() == "true"
         
         # Telegram 通知配置
@@ -233,13 +233,27 @@ def click_sign_icon(driver):
             # 检查是否有按钮
             buttons = board_intro.find_elements(By.TAG_NAME, "button")
             if buttons:
-                print(f"发现 {len(buttons)} 个按钮，尝试点击...")
-                target_button = buttons[0]
+                print(f"发现 {len(buttons)} 个按钮")
+                target_button = None
+                
+                # 根据配置选择按钮
                 for btn in buttons:
                     text = btn.text
-                    if "手气" in text or "鸡腿" in text:
-                        target_button = btn
-                        break
+                    if config.ns_random:
+                        if "手气" in text:
+                            target_button = btn
+                            print("已选择 '试试手气' 按钮 (NS_RANDOM=true)")
+                            break
+                    else:
+                        if "鸡腿" in text or "x 5" in text:
+                            target_button = btn
+                            print("已选择 '鸡腿 x 5' 按钮 (NS_RANDOM=false)")
+                            break
+                
+                # 如果没找到偏好的按钮，默认选第一个
+                if not target_button:
+                    print("未找到首选按钮，使用第一个可用按钮")
+                    target_button = buttons[0]
                 
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_button)
                 time.sleep(0.5)
@@ -258,8 +272,37 @@ def click_sign_icon(driver):
         except TimeoutException:
             print("⚠️ 未找到签到面板 (.board-intro)，尝试全局文本搜索...")
             
-            # 3. 兜底策略：全局搜索文本
-            # 有时候 .board-intro 加载慢或者结构变了，直接找关键文本
+            # 3. 兜底策略：全局搜索文本和按钮
+            print("尝试直接查找签到按钮...")
+            try:
+                target_button = None
+                if config.ns_random:
+                    print("配置为随机签到，优先查找 '试试手气'...")
+                    btns = driver.find_elements(By.XPATH, "//button[contains(text(), '手气')]")
+                    if btns: target_button = btns[0]
+                else:
+                    print("配置为固定签到，优先查找 '鸡腿 x 5'...")
+                    btns = driver.find_elements(By.XPATH, "//button[contains(text(), '鸡腿')]")
+                    if btns: target_button = btns[0]
+                
+                # 如果没找到，尝试找另一个
+                if not target_button:
+                    print("首选按钮未找到，尝试查找任意签到按钮...")
+                    btns = driver.find_elements(By.XPATH, "//button[contains(text(), '鸡腿') or contains(text(), '手气')]")
+                    if btns: target_button = btns[0]
+                    
+                if target_button:
+                    print(f"✅ 全局查找发现按钮: {target_button.text}，尝试点击...")
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_button)
+                    time.sleep(0.5)
+                    driver.execute_script("arguments[0].click();", target_button)
+                    print("全局按钮点击成功")
+                    time.sleep(2)
+                    return "success"
+            except Exception as e:
+                print(f"全局按钮查找失败: {str(e)}")
+
+            # 有时候 .board-intro 加载慢或者结构变了，直接找关键文本确认是否已签到
             try:
                 # 检查是否存在包含"今日签到获得"的元素
                 success_msg = driver.find_elements(By.XPATH, "//*[contains(text(), '今日签到获得') or contains(text(), '当前排名')]")
@@ -316,9 +359,11 @@ def setup_driver_and_cookies(cookie_str):
             print("启用无头模式...")
             options.add_argument('--headless=new')
             options.add_argument('--window-size=1920,1080')
-            options.add_argument('--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+            # 更新为较新的 User-Agent (Chrome 122)
+            options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
         
         # 禁用自动化控制标记
+        options.add_argument('--disable-blink-features=AutomationControlled')
         options.add_experimental_option('excludeSwitches', ['enable-automation'])
         options.add_experimental_option('useAutomationExtension', False)
         
@@ -501,7 +546,7 @@ def run_for_account(cookie_str, account_index):
         result["sign_in"] = click_sign_icon(driver)
         
         # 执行评论任务
-        result["comments"] = nodeseek_comment(driver)
+        # result["comments"] = nodeseek_comment(driver)
         
     finally:
         try:
@@ -524,11 +569,11 @@ if __name__ == "__main__":
     print(f"检测到 {config.account_count} 个账号")
     
     # 随机延迟执行
-    delay_seconds = config.get_random_delay_seconds()
-    if delay_seconds > 0:
-        delay_minutes = delay_seconds / 60
-        print(f"随机延迟执行: 等待 {delay_minutes:.1f} 分钟...")
-        time.sleep(delay_seconds)
+    # delay_seconds = config.get_random_delay_seconds()
+    # if delay_seconds > 0:
+    #     delay_minutes = delay_seconds / 60
+    #     print(f"随机延迟执行: 等待 {delay_minutes:.1f} 分钟...")
+    #     time.sleep(delay_seconds)
     
     # 为每个账号执行任务
     all_results = []
