@@ -35,6 +35,23 @@
 
 ### 方式二：Cloudflare Worker 部署（推荐 🚀 免费 + 零运维）
 
+[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tanaer/nodeseek-AutoDaily-signin/tree/main/worker)
+
+点击上方按钮即可一键部署到你的 Cloudflare 账号。部署后需在 Worker 设置中添加以下 Secrets：
+
+| Secret | 说明 |
+|--------|------|
+| `TG_BOT_TOKEN` | Telegram Bot Token |
+| `TG_CHAT_ID` | Telegram Chat ID |
+| `NS_COOKIE` | NodeSeek Cookie |
+| `REDIS_URL` | Upstash Redis REST URL |
+| `REDIS_TOKEN` | Upstash Redis REST Token |
+
+部署完成后访问 `https://your-worker.workers.dev/register` 注册 Webhook，Bot 立即上线 ✅
+
+<details>
+<summary>📋 手动部署（命令行方式）</summary>
+
 无需服务器，一键部署到 Cloudflare Workers，支持 Telegram Bot 命令管理。
 
 ```bash
@@ -60,6 +77,8 @@ npx wrangler deploy
 ```
 
 > 💡 部署完成后，访问 `https://your-worker.workers.dev/register` 即可一键注册 Webhook。
+
+</details>
 
 ### 方式三：Python Bot 常驻部署（需 VPS）
 
