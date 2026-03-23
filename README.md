@@ -33,7 +33,35 @@
 3. Actions 将每天自动执行两次：
    - 北京时间 **00:10** 和 **12:20**
 
-### 方式二：Telegram Bot 常驻部署
+### 方式二：Cloudflare Worker 部署（推荐 🚀 免费 + 零运维）
+
+无需服务器，一键部署到 Cloudflare Workers，支持 Telegram Bot 命令管理。
+
+```bash
+# 1. 克隆仓库并进入 Worker 目录
+git clone https://github.com/tanaer/nodeseek-AutoDaily-signin.git
+cd nodeseek-AutoDaily-signin/worker
+
+# 2. 安装依赖
+npm install
+
+# 3. 配置 Secrets（在 Cloudflare Dashboard 或命令行设置）
+npx wrangler secret put TG_BOT_TOKEN
+npx wrangler secret put TG_CHAT_ID
+npx wrangler secret put NS_COOKIE
+npx wrangler secret put REDIS_URL      # Upstash Redis REST URL
+npx wrangler secret put REDIS_TOKEN    # Upstash Redis REST Token
+
+# 4. 部署
+npx wrangler deploy
+
+# 5. 注册 Telegram Webhook（部署后访问以下地址）
+# https://your-worker.workers.dev/register
+```
+
+> 💡 部署完成后，访问 `https://your-worker.workers.dev/register` 即可一键注册 Webhook。
+
+### 方式三：Python Bot 常驻部署（需 VPS）
 
 ```bash
 # 1. 克隆仓库
