@@ -49,7 +49,7 @@ export default {
 
       try {
         const update = await request.json();
-        const db = new DB(env.REDIS_URL, env.REDIS_TOKEN);
+        const db = new DB(env.REDIS_URL);
         const bot = new TelegramBot(env.TG_BOT_TOKEN, db);
         await bot.handleUpdate(update as any);
       } catch (e) {
@@ -89,7 +89,7 @@ export default {
  * 执行所有巡检任务
  */
 async function runScheduledTasks(env: Env): Promise<void> {
-  const db = new DB(env.REDIS_URL, env.REDIS_TOKEN);
+  const db = new DB(env.REDIS_URL);
   const ns = new NodeSeek(env.NS_COOKIE);
 
   const tasks = await db.getAllTasks();

@@ -39,6 +39,10 @@ DELAY_MIN = int(os.environ.get("NS_DELAY_MIN", "") or "0")
 DELAY_MAX = int(os.environ.get("NS_DELAY_MAX", "") or "10")
 
 
+# 默认导航超时 (毫秒)
+NAV_TIMEOUT = 60000
+
+
 def _wait_for_cloudflare(page, max_wait=30):
     """等待 Cloudflare 验证通过"""
     time.sleep(3)
@@ -52,6 +56,36 @@ def _wait_for_cloudflare(page, max_wait=30):
         except:
             time.sleep(3)
     print("Cloudflare 验证超时")
+    return False
+
+
+def _safe_goto(page, url, retries=2):
+    """带重试和超时保护的页面导航"""
+    for attempt in range(retries + 1):
+        try:
+            page.goto(url, wait_until='domcontentloaded', timeout=NAV_TIMEOUT)
+            return True
+        except Exception as e:
+            print(f"导航到 {url} 失败 (尝试 {attempt+1}/{retries+1}): {e}")
+            if attempt < retries:
+                time.sleep(3)
+            else:
+                return False
+    return False
+
+
+def _safe_reload(page, retries=2):
+    """带重试和超时保护的页面刷新"""
+    for attempt in range(retries + 1):
+        try:
+            page.reload(wait_until='domcontentloaded', timeout=NAV_TIMEOUT)
+            return True
+        except Exception as e:
+            print(f"页面刷新失败 (尝试 {attempt+1}/{retries+1}): {e}")
+            if attempt < retries:
+                time.sleep(3)
+            else:
+                return False
     return False
 
 
@@ -106,7 +140,8 @@ def click_sign_icon(page):
     """
     try:
         print("直接访问签到页面...")
-        page.goto("https://www.nodeseek.com/board", wait_until="domcontentloaded")
+        if not _safe_goto(page, "https://www.nodeseek.com/board"):
+            return "failed", "签到页面加载超时"
         _wait_for_cloudflare(page)
         time.sleep(3)
 
@@ -184,10 +219,11 @@ def nodeseek_comment(page):
     comment_count = 0
     try:
         print(f"正在访问评论区域: {COMMENT_URL}")
-        page.goto(COMMENT_URL, wait_until="domcontentloaded")
+        if not _safe_goto(page, COMMENT_URL):
+            return comment_count
         _wait_for_cloudflare(page)
 
-        page.wait_for_selector('.post-list-item', timeout=30000)
+        page.wait_for_selector('.post-list-item', timeout=NAV_TIMEOUT)
         posts = page.locator('.post-list-item').all()
         print(f"获取到 {len(posts)} 个帖子")
 
@@ -218,7 +254,9 @@ def nodeseek_comment(page):
 
             try:
                 print(f"处理第 {i+1} 个帖子: {url}")
-                page.goto(url, wait_until="domcontentloaded")
+                if not _safe_goto(page, url):
+                    consecutive_fails += 1
+                    continue
                 _wait_for_cloudflare(page)
                 time.sleep(2)
 
@@ -295,7 +333,9 @@ def run_for_account(cookie_str, account_index):
             page.set_viewport_size({"width": 1920, "height": 1080})
 
             # 访问首页并注入 Cookie
-            page.goto('https://www.nodeseek.com', wait_until="domcontentloaded")
+            if not _safe_goto(page, 'https://www.nodeseek.com'):
+                result["error"] = "首页加载超时"
+                return result
             time.sleep(3)
 
             cookies_to_add = []
@@ -312,7 +352,9 @@ def run_for_account(cookie_str, account_index):
                     continue
 
             page.context.add_cookies(cookies_to_add)
-            page.reload(wait_until="domcontentloaded")
+            if not _safe_reload(page):
+                result["error"] = "Cookie 注入后刷新超时"
+                return result
             time.sleep(3)
             _wait_for_cloudflare(page)
 

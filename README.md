@@ -44,8 +44,7 @@
 | `TG_BOT_TOKEN` | Telegram Bot Token |
 | `TG_CHAT_ID` | Telegram Chat ID |
 | `NS_COOKIE` | NodeSeek Cookie |
-| `REDIS_URL` | Upstash Redis REST URL |
-| `REDIS_TOKEN` | Upstash Redis REST Token |
+| `REDIS_URL` | Upstash Redis 连接串（`redis://default:xxx@host:6379`） |
 
 部署完成后访问 `https://your-worker.workers.dev/register` 注册 Webhook，Bot 立即上线 ✅
 
@@ -66,8 +65,7 @@ npm install
 npx wrangler secret put TG_BOT_TOKEN
 npx wrangler secret put TG_CHAT_ID
 npx wrangler secret put NS_COOKIE
-npx wrangler secret put REDIS_URL      # Upstash Redis REST URL
-npx wrangler secret put REDIS_TOKEN    # Upstash Redis REST Token
+npx wrangler secret put REDIS_URL      # 格式: redis://default:TOKEN@host:6379
 
 # 4. 部署
 npx wrangler deploy
@@ -138,7 +136,7 @@ python bot.py
 | `NS_COOKIE` | ✅ | NodeSeek Cookie，多账号用 `\|` 分隔 |
 | `TG_BOT_TOKEN` | ✅ | Telegram Bot Token |
 | `TG_CHAT_ID` | ✅ | Telegram Chat ID |
-| `REDIS_URL` | Bot 模式必填 | Upstash Redis 连接 URL（`rediss://...`） |
+| `REDIS_URL` | Bot 模式必填 | Upstash Redis 连接串（`redis://default:TOKEN@host:6379`） |
 | `PUSHPLUS_TOKEN` | ❌ | PushPlus 推送 Token（使用 pushplus 通道时需要） |
 | `TWOCAPTCHA_API_KEY` | ❌ | 2Captcha API Key（已内置默认值） |
 | `NS_RANDOM` | ❌ | `true`(默认): 试试手气 / `false`: 鸡腿 x 5 |

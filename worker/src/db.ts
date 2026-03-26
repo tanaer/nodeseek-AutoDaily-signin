@@ -24,9 +24,15 @@ export class DB {
   private url: string;
   private token: string;
 
-  constructor(url: string, token: string) {
-    this.url = url.replace(/\/$/, '');
-    this.token = token;
+  /**
+   * 接受标准 Redis 连接串: redis://default:TOKEN@host:port
+   * 自动解析为 Upstash REST API 格式
+   */
+  constructor(redisUrl: string) {
+    const parsed = new URL(redisUrl);
+    const host = parsed.hostname; // e.g. improved-labrador-39486.upstash.io
+    this.token = parsed.password; // e.g. AZo-AAIncDE...
+    this.url = `https://${host}`;
   }
 
   /** 发送 Upstash Redis REST 命令 */
